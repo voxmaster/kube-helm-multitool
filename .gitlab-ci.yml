@@ -98,7 +98,7 @@ Build Legacy Helm Image:
     - docker tag ${CONTAINER_REGISTRY}:${RELEASE}-${ADDITION}
       ${CONTAINER_REGISTRY}:${RELEASE_MINOR_HELM_MAJOR}-${ADDITION}
     - docker tag ${CONTAINER_REGISTRY}:${RELEASE}-${ADDITION}
-      ${CONTAINER_REGISTRY}:latest
+      ${CONTAINER_REGISTRY}:${ADDITION}
     # Push all tags
     - docker push ${CONTAINER_REGISTRY}:${RELEASE}-${ADDITION}
     - docker push ${CONTAINER_REGISTRY}:${RELEASE_MINOR}-${ADDITION}
