@@ -1,0 +1,126 @@
+stages:
+  - main-build
+  - additional-build
+
+variables:
+  GIT_DEPTH: "1"
+  CONTAINER_REGISTRY: voxsoft/kube-helm-multitool
+  HELM_MAJOR_VERSION: "v3"
+
+default:
+  image: docker:stable
+  tags:
+    - docker
+  services:
+    - docker:dind
+  before_script:
+    # Get current versions
+    - apk add curl
+    - export K8S_VERSION=$(curl -Ls -o /dev/null -w %{url_effective} https://github.com/kubernetes/kubernetes/releases/latest | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+')
+    - export K8S_VERSION_MINOR=$(echo ${K8S_VERSION} | cut -d '.' -f -2)
+    - export HELM_VERSION=$(curl -Ls https://github.com/helm/helm/releases | grep -oE "${HELM_MAJOR_VERSION}\.[0-9]+\.[0-9]+\.tar\.gz" | head -n 1 | cut -d '.' -f -3)
+    - export HELM_VERSION_MINOR=$(echo ${HELM_VERSION} | cut -d '.' -f -2)
+    - export RELEASE=${K8S_VERSION}-${HELM_VERSION}
+    - export RELEASE_MINOR=${K8S_VERSION_MINOR}-${HELM_VERSION_MINOR}
+    - export RELEASE_MINOR_HELM_MAJOR=${K8S_VERSION_MINOR}-${HELM_MAJOR_VERSION}
+    # Enable experimental feature to be able to inspect remote images
+    - 'mkdir -p ~/.docker && echo ''{"experimental": "enabled"}'' > ~/.docker/config.json'
+    # Authenticate to Container Registry
+    - docker login -u $CONTAINER_REGISTRY_USER -p $CONTAINER_REGISTRY_PASSWORD
+
+Build Main Image:
+  stage: main-build
+  script:
+    # Stop if image already exists
+    - |
+      if [ $FORCE_REBUILD == "true" ]
+        then echo -e "\e[41mImage Rebuild Forced!\e[0m"
+        else docker manifest inspect ${CONTAINER_REGISTRY}:${RELEASE} > /dev/null && echo "Version ${RELEASE} is already exists" && exit 0
+      fi
+    # Build container image
+    - docker build -t ${CONTAINER_REGISTRY}:${RELEASE}
+      --build-arg K8S_VERSION=${K8S_VERSION}
+      --build-arg HELM_VERSION=${HELM_VERSION} .
+    # Additional tags for container image
+    - docker tag ${CONTAINER_REGISTRY}:${RELEASE}
+      ${CONTAINER_REGISTRY}:${RELEASE_MINOR}
+    - docker tag ${CONTAINER_REGISTRY}:${RELEASE}
+      ${CONTAINER_REGISTRY}:${RELEASE_MINOR_HELM_MAJOR}
+    - docker tag ${CONTAINER_REGISTRY}:${RELEASE}
+      ${CONTAINER_REGISTRY}:latest
+    # Push all tags
+    - docker push ${CONTAINER_REGISTRY}:${RELEASE}
+    - docker push ${CONTAINER_REGISTRY}:${RELEASE_MINOR}
+    - docker push ${CONTAINER_REGISTRY}:${RELEASE_MINOR_HELM_MAJOR}
+    - docker push ${CONTAINER_REGISTRY}:latest
+
+Build Legacy Helm Image:
+  extends: Build Main Image
+  variables:
+    HELM_MAJOR_VERSION: "v2"
+  script:
+    # Stop if image already exists
+    - |
+      if [ $FORCE_REBUILD == "true" ]
+        then echo -e "\e[41mImage Rebuild Forced!\e[0m"
+        else docker manifest inspect ${CONTAINER_REGISTRY}:${RELEASE} > /dev/null && echo "Version ${RELEASE} is already exists" && exit 0
+      fi
+    # Build container image
+    - docker build -t ${CONTAINER_REGISTRY}:${RELEASE}
+      --build-arg K8S_VERSION=${K8S_VERSION}
+      --build-arg HELM_VERSION=${HELM_VERSION} .
+    # Additional tags for container image
+    - docker tag ${CONTAINER_REGISTRY}:${RELEASE}
+      ${CONTAINER_REGISTRY}:${RELEASE_MINOR}
+    - docker tag ${CONTAINER_REGISTRY}:${RELEASE}
+      ${CONTAINER_REGISTRY}:${RELEASE_MINOR_HELM_MAJOR}
+    # Push all tags
+    - docker push ${CONTAINER_REGISTRY}:${RELEASE}
+    - docker push ${CONTAINER_REGISTRY}:${RELEASE_MINOR}
+    - docker push ${CONTAINER_REGISTRY}:${RELEASE_MINOR_HELM_MAJOR}
+
+.Build Additional Image:
+  stage: additional-build
+  script:
+    # Stop if image already exists
+    - |
+      if [ $FORCE_REBUILD == "true" ]
+        then echo -e "\e[41mImage Rebuild Forced!\e[0m"
+        else docker manifest inspect ${CONTAINER_REGISTRY}:${RELEASE}-${ADDITION} > /dev/null && echo "Version ${RELEASE}-${ADDITION} is already exists" && exit 0
+      fi
+    # Build container image
+    - docker build -t ${CONTAINER_REGISTRY}:${RELEASE}-${ADDITION}
+      --build-arg K8S_VERSION=${K8S_VERSION}
+      --build-arg HELM_VERSION=${HELM_VERSION} -f ${ADDITION}.Dockerfile .
+    # Additional tags for container image
+    - docker tag ${CONTAINER_REGISTRY}:${RELEASE}-${ADDITION}
+      ${CONTAINER_REGISTRY}:${RELEASE_MINOR}-${ADDITION}
+    - docker tag ${CONTAINER_REGISTRY}:${RELEASE}-${ADDITION}
+      ${CONTAINER_REGISTRY}:${RELEASE_MINOR_HELM_MAJOR}-${ADDITION}
+    - docker tag ${CONTAINER_REGISTRY}:${RELEASE}-${ADDITION}
+      ${CONTAINER_REGISTRY}:latest
+    # Push all tags
+    - docker push ${CONTAINER_REGISTRY}:${RELEASE}-${ADDITION}
+    - docker push ${CONTAINER_REGISTRY}:${RELEASE_MINOR}-${ADDITION}
+    - docker push ${CONTAINER_REGISTRY}:${RELEASE_MINOR_HELM_MAJOR}-${ADDITION}
+    - docker push ${CONTAINER_REGISTRY}:${ADDITION}
+
+Build GCloud Additional  Image:
+  extends: .Build Additional Image
+  variables:
+    ADDITION: gcloud
+
+Build Docker Additional  Image:
+  extends: .Build Additional Image
+  variables:
+    ADDITION: docker
+
+Build AWS Additional Image:
+  extends: .Build Additional Image
+  variables:
+    ADDITION: aws
+
+Build AWS Docker Additional Image:
+  extends: .Build Additional Image
+  variables:
+    ADDITION: aws-docker
