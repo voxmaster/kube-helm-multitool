@@ -68,7 +68,7 @@ Build Legacy Helm Image:
     # Build container image
     - docker build -t ${CONTAINER_REGISTRY}:${RELEASE}
       --build-arg K8S_VERSION=${K8S_VERSION}
-      --build-arg HELM_VERSION=${HELM_VERSION} .
+      --build-arg HELM_VERSION=${HELM_VERSION} -f helm-v2.Dockerfile .
     # Additional tags for container image
     - docker tag ${CONTAINER_REGISTRY}:${RELEASE}
       ${CONTAINER_REGISTRY}:${RELEASE_MINOR}
