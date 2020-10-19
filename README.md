@@ -21,8 +21,8 @@ Main image contain:
 ### Additional Images
 In addition to main image, also additional images are being built each time new kubectl/helm releases come.
 - aws-cli
-- aws-cli and docker client
-- docker
+- aws-cli and docker-cli
+- docker-cli
 - gcloud-cli
 
 
@@ -34,8 +34,11 @@ Tag forming example
 |v1.18.6-v3.2.4             |v1.18.6              |v3.2.4             | none |
 |v1.18-v3.2                 |v1.18 (latest patch) |v3.2 (latest patch)| none |
 |v1.18-v3                   |v1.18 (latest patch) |v3 (latest minor)  | none |
-|v1.18.6-v3.2.4-aws-docker  |v1.18.6              |v3.2.4             | `aws-cli` and `docker` |
+|v1.18.6-v3.2.4-aws-docker  |v1.18.6              |v3.2.4             | `aws-cli` and `docker-cli` |
 |v1.18-v3.2-gcloud          |v1.18 (latest patch) |v3.2 (latest patch)| `gcloud-cli` |
+|aws                        |(latest)             |(latest)           | `aws-cli` |
+|aws-docker                 |(latest)             |(latest)           | `aws-cli` and `docker-cli` |
+|gcloud                     |(latest)             |(latest)           | `gcloud-cli` |
 
 
 ## TODO
