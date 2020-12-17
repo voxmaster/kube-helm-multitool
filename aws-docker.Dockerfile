@@ -19,6 +19,6 @@ RUN apk add --no-cache --update \
     helm plugin install https://github.com/databus23/helm-diff && \
     apk add --no-cache aws-cli
 
-COPY --from=docker:latest /usr/local/bin/docker /usr/local/bin/docker
+COPY --from=docker:stable /usr/local/bin/docker /usr/local/bin/docker
 
 CMD ["docker"]
