@@ -1,4 +1,6 @@
 # Kubernetes Helm Multi-Tool 
+Daily build status  
+![build passing](https://gitlab.com/voxsoft/tools/kube-helm-multitool/badges/master/pipeline.svg)
 
 ## About this project
 Just another container images that contain all required for typical kubernetes/helm build and deploy.  
@@ -16,6 +18,7 @@ Main image contain:
 - curl
 - envsubst
 - git
+- jq (>28.12.2020)
 
 
 ### Additional Images
@@ -40,6 +43,15 @@ Tag forming example
 |aws-docker                 |(latest)             |(latest)           | `aws-cli` and `docker-cli` |
 |gcloud                     |(latest)             |(latest)           | `gcloud-cli` |
 
+### Changelog:
+28.12.2020
+- FIX: `docker-cli` - The problem that not allow using an image in the docker build process on GitLab runners
+- FIX: `kubectl` - The image did not have the latest version installed.
+- FEATURE: `jq` - Tool included in all images
+- FEATURE: `gcloud-cli` Install latest  version on image build
+- CI: Implemented possibility to rebuild image using predefined kubectl, helm, gcloud versions
 
-## TODO
-- Force specific version via Gitlab CI/CD Variable
+*NOTE: Previous images will not be updated*
+
+# Contributing
+Feel free to open an [issue](https://gitlab.com/voxsoft/tools/kube-helm-multitool/-/issues) or create [merge request](https://gitlab.com/voxsoft/tools/kube-helm-multitool/-/merge_requests) to improve this project.
