@@ -11,6 +11,7 @@ RUN apk add --no-cache --update \
     curl \
     git \
     gettext \
+    jq \
     tar \
     gzip && \
     curl -L https://storage.googleapis.com/kubernetes-release/release/${K8S_VERSION}/bin/linux/amd64/kubectl -o /usr/local/bin/kubectl && \
@@ -18,7 +19,7 @@ RUN apk add --no-cache --update \
     chmod +x /usr/local/bin/kubectl && \
     helm plugin install https://github.com/databus23/helm-diff
 
-ARG CLOUD_SDK_VERSION=302.0.0
+ARG CLOUD_SDK_VERSION
 ENV PATH /google-cloud-sdk/bin:$PATH
 
 RUN apk --no-cache add \

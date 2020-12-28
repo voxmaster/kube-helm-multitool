@@ -14,12 +14,32 @@ default:
   services:
     - docker:dind
   before_script:
-    # Get current versions
-    - apk add curl
-    - export K8S_VERSION=$(curl -Ls -o /dev/null -w %{url_effective} https://github.com/kubernetes/kubernetes/releases/latest | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+')
+    # Get current cli versions if not predefined
+    - apk add curl jq
+    # kubernetes-cli
+    - if [ -z ${K8S_VERSION+x} ];
+        then export K8S_VERSION=$(curl -Ls https://github.com/kubernetes/kubernetes/releases | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+\.tar\.gz' | head -n 1 | cut -d '.' -f -3);
+        else echo "Kubernetes-cli version forced to '$K8S_VERSION'";
+      fi
     - export K8S_VERSION_MINOR=$(echo ${K8S_VERSION} | cut -d '.' -f -2)
-    - export HELM_VERSION=$(curl -Ls https://github.com/helm/helm/releases | grep -oE "${HELM_MAJOR_VERSION}\.[0-9]+\.[0-9]+\.tar\.gz" | head -n 1 | cut -d '.' -f -3)
+    # helm
+    - if [ -z ${HELM_VERSION+x} ];
+        then export HELM_VERSION=$(curl -Ls https://github.com/helm/helm/releases | grep -oE "${HELM_MAJOR_VERSION}\.[0-9]+\.[0-9]+\.tar\.gz" | head -n 1 | cut -d '.' -f -3);
+        else echo "Helm version forced to '$HELM_VERSION'";
+      fi
     - export HELM_VERSION_MINOR=$(echo ${HELM_VERSION} | cut -d '.' -f -2)
+    # google cloud sdk
+    - if [ -z ${CLOUD_SDK_VERSION+x} ];
+        then export CLOUD_SDK_VERSION=$(curl -Ls "https://www.googleapis.com/storage/v1/b/cloud-sdk-release/o?prefix=google-cloud-sdk-3" |
+             jq -r '.items[].selfLink | select ( match ("linux-x86_64") )' | tail -n1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+');
+        else echo "Google Cloud SDK version forced to '$CLOUD_SDK_VERSION'";
+      fi
+    # Show versions in job log:
+    - echo -e "
+      \n kubectl:\e[44m ${K8S_VERSION} \e[0m 
+      \n helm:\e[44m ${HELM_VERSION} \e[0m 
+      \n gcloud:\e[44m ${CLOUD_SDK_VERSION} \e[0m"
+    # Create release image tag
     - export RELEASE=${K8S_VERSION}-${HELM_VERSION}
     - export RELEASE_MINOR=${K8S_VERSION_MINOR}-${HELM_VERSION_MINOR}
     - export RELEASE_MINOR_HELM_MAJOR=${K8S_VERSION_MINOR}-${HELM_MAJOR_VERSION}
@@ -32,11 +52,11 @@ Build Main Image:
   stage: main-build
   script:
     # Stop if image already exists
-    - |
-      if [ $FORCE_REBUILD == "true" ]
-        then echo -e "\e[41mImage Rebuild Forced!\e[0m"
-        else docker manifest inspect ${CONTAINER_REGISTRY}:${RELEASE} > /dev/null && echo "Version ${RELEASE} is already exists" && exit 0
+    - if [ "${FORCE_REBUILD}" == "true" ];
+        then echo -e "\e[41mImage Rebuild Forced!\e[0m";
+        else docker manifest inspect ${CONTAINER_REGISTRY}:${RELEASE} > /dev/null && echo -e "\e[44mVersion ${RELEASE} is already exists\e[0m" && exit 0;
       fi
+    - if echo "$HELM_VERSION" | grep '^v2' >/dev/null ; then echo -e "\e[104m.But for v2. Exiting\e[0m" && exit 0; fi
     # Build container image
     - docker build -t ${CONTAINER_REGISTRY}:${RELEASE}
       --build-arg K8S_VERSION=${K8S_VERSION}
@@ -53,18 +73,20 @@ Build Main Image:
     - docker push ${CONTAINER_REGISTRY}:${RELEASE_MINOR}
     - docker push ${CONTAINER_REGISTRY}:${RELEASE_MINOR_HELM_MAJOR}
     - docker push ${CONTAINER_REGISTRY}:latest
+  only:
+    - master
 
 Build Legacy Helm Image:
   extends: Build Main Image
   variables:
     HELM_MAJOR_VERSION: "v2"
   script:
-    # Stop if image already exists
-    - |
-      if [ $FORCE_REBUILD == "true" ]
-        then echo -e "\e[41mImage Rebuild Forced!\e[0m"
-        else docker manifest inspect ${CONTAINER_REGISTRY}:${RELEASE} > /dev/null && echo "Version ${RELEASE} is already exists" && exit 0
+    # Stop if image already exists, or was forced, but not v2
+    - if [ "${FORCE_REBUILD}" == "true" ];
+        then echo -e "\e[41mImage Rebuild Forced!\e[0m";
+        else docker manifest inspect ${CONTAINER_REGISTRY}:${RELEASE} > /dev/null && echo -e "\e[44mVersion ${RELEASE} is already exists\e[0m" && exit 0;
       fi
+    - if echo "$HELM_VERSION" | grep -v '^v2' >/dev/null ; then echo -e "\e[104m...But not v2. Exiting\e[0m" && exit 0; fi
     # Build container image
     - docker build -t ${CONTAINER_REGISTRY}:${RELEASE}
       --build-arg K8S_VERSION=${K8S_VERSION}
@@ -78,20 +100,23 @@ Build Legacy Helm Image:
     - docker push ${CONTAINER_REGISTRY}:${RELEASE}
     - docker push ${CONTAINER_REGISTRY}:${RELEASE_MINOR}
     - docker push ${CONTAINER_REGISTRY}:${RELEASE_MINOR_HELM_MAJOR}
+  only:
+    - master
 
 .Build Additional Image:
   stage: additional-build
   script:
     # Stop if image already exists
-    - |
-      if [ $FORCE_REBUILD == "true" ]
-        then echo -e "\e[41mImage Rebuild Forced!\e[0m"
-        else docker manifest inspect ${CONTAINER_REGISTRY}:${RELEASE}-${ADDITION} > /dev/null && echo "Version ${RELEASE}-${ADDITION} is already exists" && exit 0
+    - if [ "${FORCE_REBUILD}" == "true" ];
+        then echo -e "\e[41mImage Rebuild Forced!\e[0m";
+        else docker manifest inspect ${CONTAINER_REGISTRY}:${RELEASE}-${ADDITION} > /dev/null && echo -e "\e[44mVersion ${RELEASE}-${ADDITION} is already exists\e[0m" && exit 0;
       fi
     # Build container image
     - docker build -t ${CONTAINER_REGISTRY}:${RELEASE}-${ADDITION}
       --build-arg K8S_VERSION=${K8S_VERSION}
-      --build-arg HELM_VERSION=${HELM_VERSION} -f ${ADDITION}.Dockerfile .
+      --build-arg HELM_VERSION=${HELM_VERSION} 
+      --build-arg CLOUD_SDK_VERSION=${CLOUD_SDK_VERSION} 
+      -f ${ADDITION}.Dockerfile .
     # Additional tags for container image
     - docker tag ${CONTAINER_REGISTRY}:${RELEASE}-${ADDITION}
       ${CONTAINER_REGISTRY}:${RELEASE_MINOR}-${ADDITION}
@@ -104,6 +129,8 @@ Build Legacy Helm Image:
     - docker push ${CONTAINER_REGISTRY}:${RELEASE_MINOR}-${ADDITION}
     - docker push ${CONTAINER_REGISTRY}:${RELEASE_MINOR_HELM_MAJOR}-${ADDITION}
     - docker push ${CONTAINER_REGISTRY}:${ADDITION}
+  only:
+    - master
 
 Build GCloud Additional  Image:
   extends: .Build Additional Image

@@ -11,6 +11,7 @@ RUN apk add --no-cache --update \
     curl \
     git \
     gettext \
+    jq \
     tar \
     gzip && \
     curl -L https://storage.googleapis.com/kubernetes-release/release/${K8S_VERSION}/bin/linux/amd64/kubectl -o /usr/local/bin/kubectl && \
