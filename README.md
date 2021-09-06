@@ -1,7 +1,7 @@
 # Kubernetes Helm Multi-Tool 
 Daily build status  
-![build passing](https://gitlab.com/voxsoft/tools/kube-helm-multitool/badges/master/pipeline.svg)
-
+[![build passing](https://gitlab.com/voxsoft/tools/kube-helm-multitool/badges/master/pipeline.svg)](https://gitlab.com/voxsoft/tools/kube-helm-multitool/-/pipelines)
+[![dockerhub](https://img.shields.io/docker/pulls/voxsoft/kube-helm-multitool.svg)](https://hub.docker.com/r/voxsoft/kube-helm-multitool)
 ## About this project
 Just another container images that contain all required for typical kubernetes/helm build and deploy.  
 Inspired by https://github.com/lwolf/helm-kubectl-docker

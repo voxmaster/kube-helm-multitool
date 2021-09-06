@@ -8,7 +8,7 @@ variables:
   HELM_MAJOR_VERSION: "v3"
 
 default:
-  image: docker:stable
+  image: ezkrg/buildx:latest
   tags:
     - docker
   services:
@@ -52,102 +52,108 @@ Build Main Image:
   stage: main-build
   script:
     # Stop if image already exists
-    - if [ "${FORCE_REBUILD}" == "true" ];
-        then echo -e "\e[41mImage Rebuild Forced!\e[0m";
-        else docker manifest inspect ${CONTAINER_REGISTRY}:${RELEASE} > /dev/null && echo -e "\e[44mVersion ${RELEASE} is already exists\e[0m" && exit 0;
-      fi
+    # - if [ "${FORCE_REBUILD}" == "true" ];
+    #     then echo -e "\e[41mImage Rebuild Forced!\e[0m";
+    #     else docker manifest inspect ${CONTAINER_REGISTRY}:${RELEASE} > /dev/null && echo -e "\e[44mVersion ${RELEASE} is already exists\e[0m" && exit 0;
+    #   fi
     - if echo "$HELM_VERSION" | grep '^v2' >/dev/null ; then echo -e "\e[104m.But for v2. Exiting\e[0m" && exit 0; fi
     # Build container image
-    - docker build -t ${CONTAINER_REGISTRY}:${RELEASE}
+    - docker buildx create --name mybuilder --use
+    - docker buildx build --platform linux/arm/v7,linux/arm64/v8,linux/amd64 --push
+        -t ${CONTAINER_REGISTRY}:${RELEASE}
+        -t ${CONTAINER_REGISTRY}:${RELEASE_MINOR}
+        -t ${CONTAINER_REGISTRY}:${RELEASE_MINOR_HELM_MAJOR}
+        -t ${CONTAINER_REGISTRY}:latest
       --build-arg K8S_VERSION=${K8S_VERSION}
       --build-arg HELM_VERSION=${HELM_VERSION} .
-    # Additional tags for container image
-    - docker tag ${CONTAINER_REGISTRY}:${RELEASE}
-      ${CONTAINER_REGISTRY}:${RELEASE_MINOR}
-    - docker tag ${CONTAINER_REGISTRY}:${RELEASE}
-      ${CONTAINER_REGISTRY}:${RELEASE_MINOR_HELM_MAJOR}
-    - docker tag ${CONTAINER_REGISTRY}:${RELEASE}
-      ${CONTAINER_REGISTRY}:latest
+    # # Additional tags for container image
+    # - docker tag ${CONTAINER_REGISTRY}:${RELEASE}
+    #   ${CONTAINER_REGISTRY}:${RELEASE_MINOR}
+    # - docker tag ${CONTAINER_REGISTRY}:${RELEASE}
+    #   ${CONTAINER_REGISTRY}:${RELEASE_MINOR_HELM_MAJOR}
+    # - docker tag ${CONTAINER_REGISTRY}:${RELEASE}
+    #   ${CONTAINER_REGISTRY}:latest
     # Push all tags
-    - docker push ${CONTAINER_REGISTRY}:${RELEASE}
-    - docker push ${CONTAINER_REGISTRY}:${RELEASE_MINOR}
-    - docker push ${CONTAINER_REGISTRY}:${RELEASE_MINOR_HELM_MAJOR}
-    - docker push ${CONTAINER_REGISTRY}:latest
+    # - docker push ${CONTAINER_REGISTRY}:${RELEASE}
+    # - docker push ${CONTAINER_REGISTRY}:${RELEASE_MINOR}
+    # - docker push ${CONTAINER_REGISTRY}:${RELEASE_MINOR_HELM_MAJOR}
+    # - docker push ${CONTAINER_REGISTRY}:latest
   only:
     - master
+    - develop
 
-Build Legacy Helm Image:
-  extends: Build Main Image
-  variables:
-    HELM_MAJOR_VERSION: "v2"
-  script:
-    # Stop if image already exists, or was forced, but not v2
-    - if [ "${FORCE_REBUILD}" == "true" ];
-        then echo -e "\e[41mImage Rebuild Forced!\e[0m";
-        else docker manifest inspect ${CONTAINER_REGISTRY}:${RELEASE} > /dev/null && echo -e "\e[44mVersion ${RELEASE} is already exists\e[0m" && exit 0;
-      fi
-    - if echo "$HELM_VERSION" | grep -v '^v2' >/dev/null ; then echo -e "\e[104m...But not v2. Exiting\e[0m" && exit 0; fi
-    # Build container image
-    - docker build -t ${CONTAINER_REGISTRY}:${RELEASE}
-      --build-arg K8S_VERSION=${K8S_VERSION}
-      --build-arg HELM_VERSION=${HELM_VERSION} -f helm-v2.Dockerfile .
-    # Additional tags for container image
-    - docker tag ${CONTAINER_REGISTRY}:${RELEASE}
-      ${CONTAINER_REGISTRY}:${RELEASE_MINOR}
-    - docker tag ${CONTAINER_REGISTRY}:${RELEASE}
-      ${CONTAINER_REGISTRY}:${RELEASE_MINOR_HELM_MAJOR}
-    # Push all tags
-    - docker push ${CONTAINER_REGISTRY}:${RELEASE}
-    - docker push ${CONTAINER_REGISTRY}:${RELEASE_MINOR}
-    - docker push ${CONTAINER_REGISTRY}:${RELEASE_MINOR_HELM_MAJOR}
-  only:
-    - master
+# Build Legacy Helm Image:
+#   extends: Build Main Image
+#   variables:
+#     HELM_MAJOR_VERSION: "v2"
+#   script:
+#     # Stop if image already exists, or was forced, but not v2
+#     - if [ "${FORCE_REBUILD}" == "true" ];
+#         then echo -e "\e[41mImage Rebuild Forced!\e[0m";
+#         else docker manifest inspect ${CONTAINER_REGISTRY}:${RELEASE} > /dev/null && echo -e "\e[44mVersion ${RELEASE} is already exists\e[0m" && exit 0;
+#       fi
+#     - if echo "$HELM_VERSION" | grep -v '^v2' >/dev/null ; then echo -e "\e[104m...But not v2. Exiting\e[0m" && exit 0; fi
+#     # Build container image
+#     - docker build -t ${CONTAINER_REGISTRY}:${RELEASE}
+#       --build-arg K8S_VERSION=${K8S_VERSION}
+#       --build-arg HELM_VERSION=${HELM_VERSION} -f helm-v2.Dockerfile .
+#     # Additional tags for container image
+#     - docker tag ${CONTAINER_REGISTRY}:${RELEASE}
+#       ${CONTAINER_REGISTRY}:${RELEASE_MINOR}
+#     - docker tag ${CONTAINER_REGISTRY}:${RELEASE}
+#       ${CONTAINER_REGISTRY}:${RELEASE_MINOR_HELM_MAJOR}
+#     # Push all tags
+#     - docker push ${CONTAINER_REGISTRY}:${RELEASE}
+#     - docker push ${CONTAINER_REGISTRY}:${RELEASE_MINOR}
+#     - docker push ${CONTAINER_REGISTRY}:${RELEASE_MINOR_HELM_MAJOR}
+#   only:
+#     - master
 
-.Build Additional Image:
-  stage: additional-build
-  script:
-    # Stop if image already exists
-    - if [ "${FORCE_REBUILD}" == "true" ];
-        then echo -e "\e[41mImage Rebuild Forced!\e[0m";
-        else docker manifest inspect ${CONTAINER_REGISTRY}:${RELEASE}-${ADDITION} > /dev/null && echo -e "\e[44mVersion ${RELEASE}-${ADDITION} is already exists\e[0m" && exit 0;
-      fi
-    # Build container image
-    - docker build -t ${CONTAINER_REGISTRY}:${RELEASE}-${ADDITION}
-      --build-arg K8S_VERSION=${K8S_VERSION}
-      --build-arg HELM_VERSION=${HELM_VERSION} 
-      --build-arg CLOUD_SDK_VERSION=${CLOUD_SDK_VERSION} 
-      -f ${ADDITION}.Dockerfile .
-    # Additional tags for container image
-    - docker tag ${CONTAINER_REGISTRY}:${RELEASE}-${ADDITION}
-      ${CONTAINER_REGISTRY}:${RELEASE_MINOR}-${ADDITION}
-    - docker tag ${CONTAINER_REGISTRY}:${RELEASE}-${ADDITION}
-      ${CONTAINER_REGISTRY}:${RELEASE_MINOR_HELM_MAJOR}-${ADDITION}
-    - docker tag ${CONTAINER_REGISTRY}:${RELEASE}-${ADDITION}
-      ${CONTAINER_REGISTRY}:${ADDITION}
-    # Push all tags
-    - docker push ${CONTAINER_REGISTRY}:${RELEASE}-${ADDITION}
-    - docker push ${CONTAINER_REGISTRY}:${RELEASE_MINOR}-${ADDITION}
-    - docker push ${CONTAINER_REGISTRY}:${RELEASE_MINOR_HELM_MAJOR}-${ADDITION}
-    - docker push ${CONTAINER_REGISTRY}:${ADDITION}
-  only:
-    - master
+# .Build Additional Image:
+#   stage: additional-build
+#   script:
+#     # Stop if image already exists
+#     - if [ "${FORCE_REBUILD}" == "true" ];
+#         then echo -e "\e[41mImage Rebuild Forced!\e[0m";
+#         else docker manifest inspect ${CONTAINER_REGISTRY}:${RELEASE}-${ADDITION} > /dev/null && echo -e "\e[44mVersion ${RELEASE}-${ADDITION} is already exists\e[0m" && exit 0;
+#       fi
+#     # Build container image
+#     - docker build -t ${CONTAINER_REGISTRY}:${RELEASE}-${ADDITION}
+#       --build-arg K8S_VERSION=${K8S_VERSION}
+#       --build-arg HELM_VERSION=${HELM_VERSION} 
+#       --build-arg CLOUD_SDK_VERSION=${CLOUD_SDK_VERSION} 
+#       -f ${ADDITION}.Dockerfile .
+#     # Additional tags for container image
+#     - docker tag ${CONTAINER_REGISTRY}:${RELEASE}-${ADDITION}
+#       ${CONTAINER_REGISTRY}:${RELEASE_MINOR}-${ADDITION}
+#     - docker tag ${CONTAINER_REGISTRY}:${RELEASE}-${ADDITION}
+#       ${CONTAINER_REGISTRY}:${RELEASE_MINOR_HELM_MAJOR}-${ADDITION}
+#     - docker tag ${CONTAINER_REGISTRY}:${RELEASE}-${ADDITION}
+#       ${CONTAINER_REGISTRY}:${ADDITION}
+#     # Push all tags
+#     - docker push ${CONTAINER_REGISTRY}:${RELEASE}-${ADDITION}
+#     - docker push ${CONTAINER_REGISTRY}:${RELEASE_MINOR}-${ADDITION}
+#     - docker push ${CONTAINER_REGISTRY}:${RELEASE_MINOR_HELM_MAJOR}-${ADDITION}
+#     - docker push ${CONTAINER_REGISTRY}:${ADDITION}
+#   only:
+#     - master
 
-Build GCloud Additional  Image:
-  extends: .Build Additional Image
-  variables:
-    ADDITION: gcloud
+# Build GCloud Additional  Image:
+#   extends: .Build Additional Image
+#   variables:
+#     ADDITION: gcloud
 
-Build Docker Additional  Image:
-  extends: .Build Additional Image
-  variables:
-    ADDITION: docker
+# Build Docker Additional  Image:
+#   extends: .Build Additional Image
+#   variables:
+#     ADDITION: docker
 
-Build AWS Additional Image:
-  extends: .Build Additional Image
-  variables:
-    ADDITION: aws
+# Build AWS Additional Image:
+#   extends: .Build Additional Image
+#   variables:
+#     ADDITION: aws
 
-Build AWS Docker Additional Image:
-  extends: .Build Additional Image
-  variables:
-    ADDITION: aws-docker
+# Build AWS Docker Additional Image:
+#   extends: .Build Additional Image
+#   variables:
+#     ADDITION: aws-docker
