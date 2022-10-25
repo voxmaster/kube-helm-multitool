@@ -1,4 +1,4 @@
-FROM alpine:3.12
+FROM alpine:3.16
 
 LABEL maintainer="Oleksii Marchenko <oleksi.marchenko@gmail.com>"
 
@@ -16,8 +16,7 @@ RUN apk add --no-cache --update \
     gzip && \
     curl -L https://storage.googleapis.com/kubernetes-release/release/${K8S_VERSION}/bin/linux/amd64/kubectl -o /usr/local/bin/kubectl && \
     curl -L https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz | tar xz && mv linux-amd64/helm /bin/helm && rm -rf linux-amd64 && \
-    chmod +x /usr/local/bin/kubectl && \
-    helm plugin install https://github.com/databus23/helm-diff
+    chmod +x /usr/local/bin/kubectl
 
 ARG CLOUD_SDK_VERSION
 ENV PATH /google-cloud-sdk/bin:$PATH
@@ -34,6 +33,9 @@ RUN apk --no-cache add \
     gcloud config set core/disable_usage_reporting true && \
     gcloud config set component_manager/disable_update_check true && \
     gcloud config set metrics/environment github_docker_image && \
-    gcloud --version
+    gcloud components install gke-gcloud-auth-plugin -q && \
+    rm -rf $(find /google-cloud-sdk/ -regex ".*/__pycache__") && \
+    rm -rf /google-cloud-sdk/.install/.backup && \
+    gcloud components list && gcloud --version
 
 CMD ["gcloud"]
