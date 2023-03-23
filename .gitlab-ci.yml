@@ -4,7 +4,10 @@ stages:
 
 variables:
   GIT_DEPTH: "1"
-  CONTAINER_REGISTRY: voxsoft/kube-helm-multitool
+  CONTAINER_REGISTRIES: |
+    voxsoft/kube-helm-multitool
+    voxmaster/kube-helm-multitool
+    $CI_REGISTRY_IMAGE
   HELM_MAJOR_VERSION: "v3"
 
 default:
@@ -15,7 +18,7 @@ default:
     - docker:dind
   before_script:
     ## Get current cli versions if not predefined
-    - apk add curl jq
+    - apk add curl
     ## kubernetes-cli
     - if [ -z ${K8S_VERSION+x} ];
         then export K8S_VERSION=$(curl -Ls https://github.com/kubernetes/kubernetes/tags | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+\.tar\.gz' | head -n 1 | cut -d '.' -f -3);
@@ -45,6 +48,7 @@ default:
     ## Enable experimental feature to be able to inspect remote images
     - 'mkdir -p ~/.docker && echo ''{"experimental": "enabled"}'' > ~/.docker/config.json'
     ## Authenticate to Container Registry
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY_IMAGE
     - docker login -u $CONTAINER_REGISTRY_USER -p $CONTAINER_REGISTRY_PASSWORD
 
 Build Main Image:
@@ -53,16 +57,17 @@ Build Main Image:
     ## Stop if image already exists
     - if [ "${FORCE_REBUILD}" == "true" ];
         then echo -e "\e[41mImage Rebuild Forced!\e[0m";
-        else docker manifest inspect ${CONTAINER_REGISTRY}:${RELEASE} > /dev/null && echo -e "\e[44mVersion ${RELEASE} is already exists\e[0m" && exit 0;
+        else docker manifest inspect ${CI_REGISTRY_IMAGE}:${RELEASE} > /dev/null && echo -e "\e[44mVersion ${RELEASE} is already exists\e[0m" && exit 0;
       fi
     - if echo "$HELM_VERSION" | grep '^v2' >/dev/null ; then echo -e "\e[104m.But for v2. Exiting\e[0m" && exit 0; fi
+    # Create a set of tags for the image with multiple registries
+    - for REGISTRY in $CONTAINER_REGISTRIES; do
+        TAGS="$TAGS -t ${REGISTRY}:${RELEASE} -t ${REGISTRY}:${RELEASE_MINOR} -t ${REGISTRY}:${RELEASE_MINOR_HELM_MAJOR} -t ${REGISTRY}:latest" ;
+      done
     ## Build and push container images
     - docker buildx create --name mybuilder --use
     - docker buildx build --platform linux/arm64/v8,linux/amd64 --push
-        -t ${CONTAINER_REGISTRY}:${RELEASE}
-        -t ${CONTAINER_REGISTRY}:${RELEASE_MINOR}
-        -t ${CONTAINER_REGISTRY}:${RELEASE_MINOR_HELM_MAJOR}
-        -t ${CONTAINER_REGISTRY}:latest
+        $TAGS
         --build-arg K8S_VERSION=${K8S_VERSION}
         --build-arg HELM_VERSION=${HELM_VERSION} .
   only:
@@ -75,15 +80,16 @@ Build Main Image:
     ## Stop if image already exists
     - if [ "${FORCE_REBUILD}" == "true" ];
         then echo -e "\e[41mImage Rebuild Forced!\e[0m";
-        else docker manifest inspect ${CONTAINER_REGISTRY}:${RELEASE}-${ADDITION} > /dev/null && echo -e "\e[44mVersion ${RELEASE}-${ADDITION} is already exists\e[0m" && exit 0;
+        else docker manifest inspect ${CI_REGISTRY_IMAGE}:${RELEASE}-${ADDITION} > /dev/null && echo -e "\e[44mVersion ${RELEASE}-${ADDITION} is already exists\e[0m" && exit 0;
       fi
+    # Create a set of tags for the image with multiple registries
+    - for REGISTRY in $CONTAINER_REGISTRIES; do
+        TAGS="$TAGS -t ${REGISTRY}:${RELEASE}-${ADDITION} -t ${REGISTRY}:${RELEASE_MINOR}-${ADDITION} -t ${REGISTRY}:${RELEASE_MINOR_HELM_MAJOR}-${ADDITION} -t ${REGISTRY}:${ADDITION}" ;
+      done
     ## Build container image
     - docker buildx create --name mybuilder --use
     - docker buildx build --platform linux/arm64/v8,linux/amd64 --push
-        -t ${CONTAINER_REGISTRY}:${RELEASE}-${ADDITION}
-        -t ${CONTAINER_REGISTRY}:${RELEASE_MINOR}-${ADDITION}
-        -t ${CONTAINER_REGISTRY}:${RELEASE_MINOR_HELM_MAJOR}-${ADDITION}
-        -t ${CONTAINER_REGISTRY}:${ADDITION}
+        $TAGS
         --build-arg K8S_VERSION=${K8S_VERSION}
         --build-arg HELM_VERSION=${HELM_VERSION} 
         --build-arg CLOUD_SDK_VERSION=${CLOUD_SDK_VERSION} 
