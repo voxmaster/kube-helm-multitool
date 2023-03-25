@@ -6,7 +6,6 @@ variables:
   GIT_DEPTH: "1"
   CONTAINER_REGISTRIES: |
     voxsoft/kube-helm-multitool
-    voxmaster/kube-helm-multitool
     $CI_REGISTRY_IMAGE
   HELM_MAJOR_VERSION: "v3"
 
